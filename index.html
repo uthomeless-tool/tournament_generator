@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>シャドバ大会ルール抽選</title>
+    <style>
+        :root { --primary: #3498db; --bg: #eef2f3; --card: #ffffff; --accent: #e74c3c; --success: #2ecc71; --tokkan: #9b59b6; }
+        body { font-family: sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; max-width: 450px; flex-wrap: wrap; }
+        .tab-btn { flex: 1; min-width: 100px; padding: 12px; border: none; border-radius: 10px; background: #ddd; cursor: pointer; font-weight: bold; font-size: 0.9rem; }
+        .tab-btn.active { background: var(--primary); color: white; }
+        .tab-btn.active.tokkan-theme { background: var(--tokkan); }
+
+        .container { width: 100%; max-width: 450px; display: flex; flex-direction: column; gap: 12px; }
+
+        .how-to-use {
+            background: rgba(0,0,0,0.05); padding: 12px; border-radius: 10px; margin-bottom: 15px;
+            font-size: 0.8rem; color: #555; line-height: 1.5; border-left: 4px solid var(--primary);
+        }
+        
+        /* スロット共通表示 */
+        .slot-row { background: var(--card); padding: 15px; border-radius: 15px; display: flex; align-items: center; gap: 15px; border: 3px solid transparent; }
+        .slot-row.finished { border-color: var(--success); }
+        .label { width: 70px; font-weight: bold; font-size: 0.85rem; color: #7f8c8d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .picker-viewport { flex-grow: 1; height: 50px; overflow: hidden; position: relative; background: #222; border-radius: 8px; cursor: pointer; }
+        .picker-list { position: absolute; width: 100%; top: 0; transition: transform 0.2s; }
+        .picker-item { height: 50px; line-height: 50px; font-size: 1rem; font-weight: bold; text-align: center; color: #fff; padding: 0 5px; overflow: hidden; }
+
+        /* 突貫バース用 */
+        .tokkan-controls { background: var(--card); padding: 15px; border-radius: 15px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; }
+        .tokkan-num-input { width: 60px; padding: 8px; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; text-align: center; }
+
+        /* 項目設定モード */
+        .config-view { display: none; background: var(--card); padding: 20px; border-radius: 15px; width: 100%; max-width: 410px; }
+        .config-section-title { font-weight: bold; margin: 20px 0 10px; padding-bottom: 5px; border-bottom: 2px solid #eee; display: flex; align-items: center; gap: 5px; }
+        .config-item { margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee; position: relative; }
+        .config-item label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; color: #34495e; }
+        .config-item input, .config-item textarea { width: calc(100% - 45px); padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 0.9rem; }
+        .del-row-btn { background: var(--accent); color: white; border: none; border-radius: 5px; padding: 10px; cursor: pointer; position: absolute; right: 0; top: 25px; }
+
+        .add-row-area { background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 2px dashed #ccc; }
+        .add-row-area input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; box-sizing: border-box; }
+
+        .lock-btn { background: #eee; border: none; border-radius: 10px; width: 40px; height: 40px; cursor: pointer; font-size: 1.2rem; }
+        .lock-btn.active { background: var(--accent); color: white; }
+        
+        /* 結果エリア & コピーボタン */
+        .result-wrapper { margin-top: 20px; display: none; flex-direction: column; gap: 10px; width: 100%; max-width: 420px; }
+        .result-text { padding: 15px; background: #333; color: #fff; border-radius: 8px; text-align: center; font-weight: bold; word-break: break-all; white-space: pre-wrap; }
+        .copy-btn { padding: 10px; background: #555; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; font-weight: bold; transition: background 0.2s; }
+        .copy-btn:hover { background: #777; }
+        .copy-btn.copied { background: var(--success); }
+
+        .controls { margin-top: 20px; width: 100%; max-width: 450px; }
+        .spin-btn { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 50px; font-size: 1.2rem; font-weight: bold; cursor: pointer; }
+        .spin-btn.tokkan-btn { background: var(--tokkan); }
+    </style>
+</head>
+<body>
+
+    <h2>プライベートロビー大会設定</h2>
+
+    <div class="tabs">
+        <button id="tab-slot" class="tab-btn active" onclick="switchTab('slot')">ルール抽選</button>
+        <button id="tab-tokkan" class="tab-btn" onclick="switchTab('tokkan')">突貫バース</button>
+        <button id="tab-config" class="tab-btn" onclick="switchTab('config')">項目設定</button>
+    </div>
+
+    <div id="slot-container" class="container">
+        <div class="how-to-use">
+            👆 <b>パネルを直接クリック</b>：特定の項目だけを手動で切り替えます。<br>
+            🔒 <b>鍵ボタン</b>：抽選で動かないように項目を固定（ロック）します。
+        </div>
+        <div id="app" class="container"></div>
+        <div id="result-wrapper-slot" class="result-wrapper">
+            <div id="result-text-area" class="result-text"></div>
+            <button class="copy-btn" onclick="copyToClipboard('result-text-area', this)">📋 結果をコピー</button>
+        </div>
+        <div class="controls">
+            <button id="main-btn" class="spin-btn" onclick="startSpin()">抽選開始！</button>
+        </div>
+    </div>
+
+    <div id="tokkan-container" class="container" style="display: none;">
+        <div class="how-to-use" style="border-left-color: var(--tokkan);">
+            🃏 <b>突貫バース</b>：選ばれたパックのカードのみで戦う特殊ルールです。<br>
+            ⚠️ 各パックは<b>重複せず独立して</b>選ばれます。
+        </div>
+        <div class="tokkan-controls">
+            <label style="font-weight: bold;">使用パック数：</label>
+            <input type="number" id="tokkan-pack-num" class="tokkan-num-input" value="4" min="1">
+        </div>
+        <div id="tokkan-app" class="container"></div>
+        <div id="result-wrapper-tokkan" class="result-wrapper">
+            <div id="tokkan-result-text" class="result-text"></div>
+            <button class="copy-btn" onclick="copyToClipboard('tokkan-result-text', this)">📋 結果をコピー</button>
+        </div>
+        <div class="controls">
+            <button id="tokkan-main-btn" class="spin-btn tokkan-btn" onclick="startTokkanSpin()">パックを抽選！</button>
+        </div>
+    </div>
+
+    <div id="config-container" class="config-view">
+        <div class="config-section-title">⚙️ 基本ルールの編集</div>
+        <div class="add-row-area">
+            <label style="font-weight: bold; font-size: 0.8rem;">＋ 新しい抽選項目を追加</label>
+            <input type="text" id="new-row-name" placeholder="項目名（例：フォーマット）">
+            <button class="tab-btn active" style="width: 100%;" onclick="addNewRow()">追加する</button>
+        </div>
+        <div id="config-editor"></div>
+
+        <div class="config-section-title">🃏 突貫バース用パックリスト</div>
+        <div class="config-item">
+            <textarea id="tokkan-list-editor" style="width:100%; height:100px; padding:10px; border-radius:5px; border:1px solid #ccc;"></textarea>
+        </div>
+
+        <button class="spin-btn" style="margin-top: 10px;" onclick="saveConfig()">設定を反映する</button>
+    </div>
+
+<script>
+let CONFIG = [
+    { id: "match", name: "対戦数", items: ["BO1", "2デッキBO1","BO3", "BO5"] },
+    { id: "hp", name: "体力", items: ["10", "15", "20", "25", "30", "35", "40", "45", "50"] },
+    { id: "pp", name: "PP最大値", items: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] },
+    { id: "rarity", name: "禁止レア", items: ["なし", "ブロンズ", "シルバー", "ゴールド", "レジェンド"] },
+    { id: "leader", name: "禁止クラス", items: ["なし", "エルフ", "ロイヤル", "ウィッチ", "ドラゴン", "ナイトメア", "ビショップ", "ネメシス"] }
+];
+let states = CONFIG.map(() => ({ currentIndex: 0, locked: false }));
+states[1].currentIndex = 2; 
+
+let TOKKAN_PACKS = ["伝説の幕開け", "インフィニティ・エボルヴ", "絶傑の継承者", "蒼空の六竜", "花酔遊戯", "アポカリプス・パクト"];
+let isSpinning = false;
+
+function switchTab(mode) {
+    document.getElementById('slot-container').style.display = (mode === 'slot') ? 'flex' : 'none';
+    document.getElementById('tokkan-container').style.display = (mode === 'tokkan') ? 'flex' : 'none';
+    document.getElementById('config-container').style.display = (mode === 'config') ? 'block' : 'none';
+    document.getElementById('tab-slot').classList.toggle('active', mode === 'slot');
+    document.getElementById('tab-tokkan').classList.toggle('active', mode === 'tokkan');
+    document.getElementById('tab-config').classList.toggle('active', mode === 'config');
+    if (mode === 'config') renderConfigEditor();
+    if (mode === 'slot') render();
+}
+
+function copyToClipboard(elementId, btn) {
+    const text = document.getElementById(elementId).innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = "✅ コピー完了！";
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.innerText = originalText;
+            btn.classList.remove('copied');
+        }, 2000);
+    });
+}
+
+function addNewRow() {
+    const name = document.getElementById('new-row-name').value.trim();
+    if (!name) return;
+    CONFIG.push({ id: "custom-" + Date.now(), name: name, items: ["なし", "あり"] });
+    states.push({ currentIndex: 0, locked: false });
+    document.getElementById('new-row-name').value = "";
+    renderConfigEditor();
+}
+
+function deleteRow(idx) {
+    CONFIG.splice(idx, 1);
+    states.splice(idx, 1);
+    renderConfigEditor();
+}
+
+function renderConfigEditor() {
+    const editor = document.getElementById('config-editor');
+    editor.innerHTML = CONFIG.map((conf, idx) => `
+        <div class="config-item">
+            <label>${conf.name}</label>
+            <input type="text" id="input-${idx}" value="${conf.items.join('、')}">
+            <button class="del-row-btn" onclick="deleteRow(${idx})">✖</button>
+        </div>
+    `).join('');
+    document.getElementById('tokkan-list-editor').value = TOKKAN_PACKS.join('、');
+}
+
+function saveConfig() {
+    CONFIG.forEach((conf, idx) => {
+        conf.items = document.getElementById(`input-${idx}`).value.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
+        if (states[idx].currentIndex >= conf.items.length) states[idx].currentIndex = 0;
+    });
+    TOKKAN_PACKS = document.getElementById('tokkan-list-editor').value.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
+    alert("反映されました！");
+    switchTab('slot');
+}
+
+function render(isFinished = false) {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+    CONFIG.forEach((config, idx) => {
+        const row = document.createElement('div');
+        row.className = `slot-row ${isFinished ? 'finished' : ''}`;
+        row.innerHTML = `
+            <div class="label">${config.name}</div>
+            <div class="picker-viewport" onclick="manualSelect(${idx})">
+                <div class="picker-list" id="list-${idx}" style="transform: translateY(-${states[idx].currentIndex * 50}px)">
+                    ${config.items.map(item => `<div class="picker-item">${item}</div>`).join('')}
+                </div>
+            </div>
+            <button class="lock-btn ${states[idx].locked ? 'active' : ''}" onclick="toggleLock(${idx})">
+                ${states[idx].locked ? '🔒' : '🔓'}
+            </button>
+        `;
+        app.appendChild(row);
+    });
+    if (isFinished) showSlotResult();
+}
+
+function showSlotResult() {
+    const wrapper = document.getElementById('result-wrapper-slot');
+    const resArea = document.getElementById('result-text-area');
+    let results = []; let bans = [];
+    states.forEach((state, idx) => {
+        const val = CONFIG[idx].items[state.currentIndex];
+        const id = CONFIG[idx].id;
+        if (id === "match") results.push(val);
+        else if (id === "hp") results.push("体力:" + val);
+        else if (id === "pp") results.push("PP:" + val);
+        else if ((id === "rarity" || id === "leader") && val !== "なし") bans.push(val);
+        else if (val !== "なし") results.push(CONFIG[idx].name + ":" + val);
+    });
+    let banText = bans.length > 0 ? "禁止:" + bans.join('、') : "";
+    if (banText) results.push(banText);
+    resArea.innerText = results.join(' / ');
+    wrapper.style.display = 'flex';
+}
+
+function manualSelect(idx) {
+    if (isSpinning) return;
+    states[idx].currentIndex = (states[idx].currentIndex + 1) % CONFIG[idx].items.length;
+    render();
+}
+
+function toggleLock(idx) {
+    if (isSpinning) return;
+    states[idx].locked = !states[idx].locked;
+    render();
+}
+
+async function startSpin() {
+    if (isSpinning || CONFIG.length === 0) return;
+    isSpinning = true;
+    document.getElementById('result-wrapper-slot').style.display = 'none';
+    let startTime = Date.now();
+    const animate = () => {
+        let elapsed = Date.now() - startTime;
+        states.forEach((state, idx) => {
+            if (state.locked) return;
+            state.currentIndex = Math.floor(Math.random() * CONFIG[idx].items.length);
+            document.getElementById(`list-${idx}`).style.transform = `translateY(-${state.currentIndex * 50}px)`;
+        });
+        if (elapsed < 500) requestAnimationFrame(animate);
+        else { isSpinning = false; render(true); }
+    };
+    requestAnimationFrame(animate);
+}
+
+function startTokkanSpin() {
+    if (isSpinning) return;
+    let count = parseInt(document.getElementById('tokkan-pack-num').value);
+    if (isNaN(count) || count < 1) return;
+    if (count > TOKKAN_PACKS.length) {
+        alert(`最大値 ${TOKKAN_PACKS.length} で抽選します。`);
+        count = TOKKAN_PACKS.length;
+    }
+
+    const app = document.getElementById('tokkan-app');
+    app.innerHTML = '';
+    document.getElementById('result-wrapper-tokkan').style.display = 'none';
+
+    let shuffled = [...TOKKAN_PACKS];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    let selected = shuffled.slice(0, count);
+
+    for (let i = 0; i < count; i++) {
+        const row = document.createElement('div');
+        row.className = 'slot-row';
+        let pool = [...TOKKAN_PACKS].filter(p => p !== selected[i]).sort(() => Math.random() - 0.5);
+        pool.unshift(selected[i]);
+        row.innerHTML = `
+            <div class="label">パック${i+1}</div>
+            <div class="picker-viewport">
+                <div class="picker-list" id="tokkan-list-${i}">
+                    ${pool.map(item => `<div class="picker-item">${item}</div>`).join('')}
+                </div>
+            </div>
+        `;
+        app.appendChild(row);
+    }
+
+    isSpinning = true;
+    let startTime = Date.now();
+    const animate = () => {
+        let elapsed = Date.now() - startTime;
+        for (let i = 0; i < count; i++) {
+            const el = document.getElementById(`tokkan-list-${i}`);
+            if (elapsed < 1000) {
+                let randomOffset = Math.floor(Math.random() * TOKKAN_PACKS.length) * 50;
+                el.style.transform = `translateY(-${randomOffset}px)`;
+            } else {
+                el.style.transform = `translateY(0px)`;
+            }
+        }
+        if (elapsed < 1000) requestAnimationFrame(animate);
+        else {
+            isSpinning = false;
+            const wrapper = document.getElementById('result-wrapper-tokkan');
+            const resArea = document.getElementById('tokkan-result-text');
+            resArea.innerText = "【突貫バース：採用パック】\n" + selected.join(' / ');
+            wrapper.style.display = 'flex';
+        }
+    };
+    requestAnimationFrame(animate);
+}
+
+render();
+</script>
+</body>
+</html>
