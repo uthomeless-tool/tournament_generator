@@ -95,7 +95,7 @@
         <div id="tokkan-app" class="container"></div>
         <div id="result-wrapper-tokkan" class="result-wrapper">
             <div id="tokkan-result-text" class="result-text"></div>
-            <button class="copy-btn" onclick="copyToClipboard('tokkan-result-text', this)">📋 結果をコピー</button>
+            <button class="copy-btn" onclick="copyToClipboard('tokkan-result-text', this)">📋 パックリストをコピー</button>
         </div>
         <div class="controls">
             <button id="tokkan-main-btn" class="spin-btn tokkan-btn" onclick="startTokkanSpin()">パックを抽選！</button>
@@ -125,7 +125,8 @@ let CONFIG = [
     { id: "hp", name: "体力", items: ["10", "15", "20", "25", "30", "35", "40", "45", "50"] },
     { id: "pp", name: "PP最大値", items: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] },
     { id: "rarity", name: "禁止レア", items: ["なし", "ブロンズ", "シルバー", "ゴールド", "レジェンド"] },
-    { id: "leader", name: "禁止クラス", items: ["なし", "エルフ", "ロイヤル", "ウィッチ", "ドラゴン", "ナイトメア", "ビショップ", "ネメシス"] }
+    { id: "leader", name: "禁止クラス", items: ["なし", "エルフ", "ロイヤル", "ウィッチ", "ドラゴン", "ナイトメア", "ビショップ", "ネメシス"] },
+    { id: "ban_pack", name: "禁止パック", items: ["なし", "伝説の幕開け", "インフィニティ・エボルヴ", "絶傑の継承者", "蒼空の六竜", "花酔遊戯", "アポカリプス・パクト"] }
 ];
 let states = CONFIG.map(() => ({ currentIndex: 0, locked: false }));
 states[1].currentIndex = 2; 
@@ -174,19 +175,28 @@ function deleteRow(idx) {
 
 function renderConfigEditor() {
     const editor = document.getElementById('config-editor');
-    editor.innerHTML = CONFIG.map((conf, idx) => `
-        <div class="config-item">
-            <label>${conf.name}</label>
-            <input type="text" id="input-${idx}" value="${conf.items.join('、')}">
-            <button class="del-row-btn" onclick="deleteRow(${idx})">✖</button>
-        </div>
-    `).join('');
+    editor.innerHTML = CONFIG.map((conf, idx) => {
+        // 禁止パック(ban_pack)の場合はtextareaで表示する
+        const isBanPack = conf.id === "ban_pack";
+        const inputField = isBanPack 
+            ? `<textarea id="input-${idx}" style="width:calc(100% - 45px); height:80px; padding:10px;">${conf.items.join('、')}</textarea>`
+            : `<input type="text" id="input-${idx}" value="${conf.items.join('、')}">`;
+        
+        return `
+            <div class="config-item">
+                <label>${conf.name}</label>
+                ${inputField}
+                <button class="del-row-btn" onclick="deleteRow(${idx})" ${isBanPack ? 'style="top:35px"' : ''}>✖</button>
+            </div>
+        `;
+    }).join('');
     document.getElementById('tokkan-list-editor').value = TOKKAN_PACKS.join('、');
 }
 
 function saveConfig() {
     CONFIG.forEach((conf, idx) => {
-        conf.items = document.getElementById(`input-${idx}`).value.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
+        const field = document.getElementById(`input-${idx}`);
+        conf.items = field.value.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
         if (states[idx].currentIndex >= conf.items.length) states[idx].currentIndex = 0;
     });
     TOKKAN_PACKS = document.getElementById('tokkan-list-editor').value.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
@@ -226,7 +236,7 @@ function showSlotResult() {
         if (id === "match") results.push(val);
         else if (id === "hp") results.push("体力:" + val);
         else if (id === "pp") results.push("PP:" + val);
-        else if ((id === "rarity" || id === "leader") && val !== "なし") bans.push(val);
+        else if ((id === "rarity" || id === "leader" || id === "ban_pack") && val !== "なし") bans.push(val);
         else if (val !== "なし") results.push(CONFIG[idx].name + ":" + val);
     });
     let banText = bans.length > 0 ? "禁止:" + bans.join('、') : "";
