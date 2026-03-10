@@ -37,9 +37,9 @@
         .slot-row.done { border-color: var(--success); background: #1a1a1a; }
         
         .slot-label { 
-            width: 90px; background: #333; color: #888; height: 100%; 
+            width: 100px; background: #333; color: #888; height: 100%; 
             display: flex; align-items: center; justify-content: center; 
-            font-size: 0.75rem; font-weight: bold; border-right: 1px solid #444; 
+            font-size: 0.7rem; font-weight: bold; border-right: 1px solid #444; 
             text-align: center; padding: 0 5px; box-sizing: border-box;
         }
         .slot-row.done .slot-label { color: var(--success); }
@@ -66,7 +66,6 @@
         .btn-main:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
         .btn-main.tokkan-btn { background: var(--tokkan); box-shadow: 0 4px 0 #7d4591; }
 
-        /* 初期値に戻すボタン */
         .btn-reset {
             width: 100%; margin-top: 15px; padding: 10px; border: 1px solid #ccc;
             background: white; color: #666; border-radius: 10px; cursor: pointer;
@@ -97,8 +96,8 @@
         <div id="slot-container">
             <h2>🎲 ルール抽選</h2>
             <div class="how-to-use">
-                👆 <b>パネルを直接クリック</b>：特定の項目だけを手動で切り替えます。<br>
-                🔒 <b>鍵ボタン</b>：抽選で動かないように項目を固定（ロック）します。
+                👆 <b>パネルを直接クリック</b>：手動で切り替え。<br>
+                🔒 <b>鍵ボタン</b>：抽選で動かないように固定。
             </div>
             <div id="app" class="slot-container"></div>
             <button id="main-btn" class="btn-main" onclick="startSpin()">抽選開始！</button>
@@ -113,7 +112,7 @@
         <div id="tokkan-container" style="display: none;">
             <h2 style="color: var(--tokkan);">🃏 突貫バース抽選</h2>
             <div class="how-to-use" style="border-left-color: var(--tokkan);">
-                🃏 <b>突貫バース</b>：選ばれたパックのカードのみで戦う特殊ルールです。<br>
+                🃏 <b>突貫バース</b>：選ばれたパックのみで戦う特殊ルール。<br>
                 ⚠️ 各パックは<b>重複せず独立して</b>選ばれます。
             </div>
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; justify-content: center;">
@@ -143,19 +142,55 @@
     </div>
 
 <script>
+// ヘルパー: 1, 5, 10...50, 99 の刻みを生成
+const generateStepValues = () => {
+    let vals = ["1"];
+    for (let i = 5; i <= 50; i += 5) vals.push(i.toString());
+    vals.push("99");
+    return vals;
+};
+
+// ヘルパー: PP用の刻み 1~10, 20, 30, 40, 50, 99
+const generatePPValues = () => {
+    let vals = [];
+    for (let i = 1; i <= 10; i++) vals.push(i.toString());
+    for (let i = 20; i <= 50; i += 10) vals.push(i.toString());
+    vals.push("99");
+    return vals;
+};
+
+const ppItems = generatePPValues();
+const range1to10 = Array.from({length: 10}, (_, i) => (i + 1).toString());
+const range0to4 = Array.from({length: 5}, (_, i) => i.toString());
+
 let CONFIG = [
-    { id: "match", name: "対戦数", items: ["BO1", "2デッキBO1","BO3", "BO5"] },
-    { id: "hp", name: "体力", items: ["10", "15", "20", "25", "30", "35", "40", "45", "50"] },
-    { id: "pp", name: "PP最大値", items: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] },
+    { id: "match", name: "対戦数", items: ["BO1", "2デッキBO1", "BO3", "BO5"] },
+    { id: "hp", name: "初期体力", items: generateStepValues() },
+    { id: "max_pp", name: "PP最大値", items: ppItems },
+    { id: "initial_pp", name: "初期PP", items: ppItems },
+    { id: "pp_gain", name: "毎ターン増加PP", items: ppItems },
+    { id: "ep", name: "EP数", items: range0to4 },
+    { id: "sep", name: "SEP数", items: range0to4 },
+    { id: "draw_count", name: "開始時ドロー数", items: ["1", "2", "3", "4", "5"] },
+    { id: "evolve_turn", name: "進化可能ターン", items: range1to10 },
+    { id: "super_evolve_turn", name: "超進化可能ターン", items: range1to10 },
     { id: "rarity", name: "禁止レア", items: ["なし", "ブロンズ", "シルバー", "ゴールド", "レジェンド"] },
     { id: "leader", name: "禁止クラス", items: ["なし", "エルフ", "ロイヤル", "ウィッチ", "ドラゴン", "ナイトメア", "ビショップ", "ネメシス"] },
     { id: "ban_pack", name: "禁止パック", items: ["なし", "伝説の幕開け", "インフィニティ・エボルヴ", "絶傑の継承者", "蒼空の六竜", "花酔遊戯", "アポカリプス・パクト"] }
 ];
 
-// 共通の初期化関数
 function getInitialStates() {
     return CONFIG.map((conf) => {
-        const initialIndex = conf.name === "体力" ? conf.items.indexOf("20") : 0;
+        let initialIndex = 0;
+        // 指定された初期値の設定
+        if (conf.id === "hp") initialIndex = conf.items.indexOf("20");
+        else if (conf.id === "max_pp") initialIndex = conf.items.indexOf("10");
+        else if (conf.id === "initial_pp" || conf.id === "pp_gain" || conf.id === "draw_count") initialIndex = conf.items.indexOf("1");
+        else if (conf.id === "ep") initialIndex = conf.items.indexOf("2");
+        else if (conf.id === "sep") initialIndex = conf.items.indexOf("2");
+        else if (conf.id === "evolve_turn") initialIndex = conf.items.indexOf("4");
+        else if (conf.id === "super_evolve_turn") initialIndex = conf.items.indexOf("6");
+        
         return { currentIndex: initialIndex !== -1 ? initialIndex : 0, locked: false };
     });
 }
@@ -183,12 +218,13 @@ function render(isFinished = false) {
     app.innerHTML = '';
     CONFIG.forEach((config, idx) => {
         const row = document.createElement('div');
-        row.className = `slot-row ${isFinished && !states[idx].locked ? 'done' : ''}`;
+        // ロック中であっても完了演出時はdoneを付与
+        row.className = `slot-row ${(isFinished || states[idx].locked) && isFinished ? 'done' : ''}`;
         row.id = `row-${idx}`;
         row.innerHTML = `
             <div class="slot-label">${config.name}</div>
             <div class="slot-viewport" onclick="manualSelect(${idx})">
-                <div class="slot-item" id="list-${idx}" style="color: ${isFinished && !states[idx].locked ? 'var(--success)' : '#fff'}">
+                <div class="slot-item" id="list-${idx}" style="color: ${(isFinished || states[idx].locked) && isFinished ? 'var(--success)' : '#fff'}">
                     ${config.items[states[idx].currentIndex]}
                 </div>
             </div>
@@ -228,7 +264,7 @@ async function animateSlot(idx, items, isTokkan = false) {
         const listEl = document.getElementById(isTokkan ? `tokkan-list-${idx}` : `list-${idx}`);
         const rowEl = document.getElementById(isTokkan ? `tokkan-row-${idx}` : `row-${idx}`);
         let count = 0;
-        const duration = 15 + (idx * 5);
+        const duration = 15 + (idx * 2); 
         const interval = setInterval(() => {
             listEl.innerText = items[Math.floor(Math.random() * items.length)];
             count++;
@@ -252,19 +288,36 @@ async function startSpin() {
 
     const promises = [];
     CONFIG.forEach((conf, idx) => {
-        if (states[idx].locked) return;
+        if (states[idx].locked) {
+            // ロックされている項目も完了扱いにするため色を緑へ
+            document.getElementById(`row-${idx}`).classList.add('done');
+            document.getElementById(`list-${idx}`).style.color = "var(--success)";
+            return;
+        }
         const rowEl = document.getElementById(`row-${idx}`);
         const listEl = document.getElementById(`list-${idx}`);
         rowEl.classList.add('active');
         rowEl.classList.remove('done');
         listEl.style.color = "#fff";
-        states[idx].currentIndex = Math.floor(Math.random() * conf.items.length);
+        
+        // 数値決定ロジック
+        if (conf.id === "initial_pp") {
+            const maxIdx = CONFIG.findIndex(c => c.id === "max_pp");
+            const maxVal = parseInt(CONFIG[maxIdx].items[states[maxIdx].currentIndex]);
+            const validIndices = conf.items
+                .map((v, i) => ({v: parseInt(v), i}))
+                .filter(x => x.v <= maxVal)
+                .map(x => x.i);
+            states[idx].currentIndex = validIndices[Math.floor(Math.random() * validIndices.length)];
+        } else {
+            states[idx].currentIndex = Math.floor(Math.random() * conf.items.length);
+        }
     });
 
     for (let i = 0; i < CONFIG.length; i++) {
         if (states[i].locked) continue;
         promises.push(animateSlot(i, CONFIG[i].items));
-        await new Promise(r => setTimeout(r, 150)); 
+        await new Promise(r => setTimeout(r, 100)); 
     }
 
     await Promise.all(promises);
@@ -302,19 +355,15 @@ async function startTokkanSpin() {
 
 function manualSelect(idx) { if (isSpinning) return; states[idx].currentIndex = (states[idx].currentIndex + 1) % CONFIG[idx].items.length; render(); }
 function toggleLock(idx) { if (isSpinning) return; states[idx].locked = !states[idx].locked; render(); }
+
 function showSlotResult() {
     const resArea = document.getElementById('result-text-area');
-    let results = []; let bans = [];
+    let results = [];
     states.forEach((state, idx) => {
         const val = CONFIG[idx].items[state.currentIndex];
-        const id = CONFIG[idx].id;
-        if (id === "match") results.push(val);
-        else if (id === "hp") results.push("体力:" + val);
-        else if (id === "pp") results.push("PP:" + val);
-        else if (["rarity", "leader", "ban_pack"].includes(id) && val !== "なし") bans.push(val);
-        else if (val !== "なし") results.push(CONFIG[idx].name + ":" + val);
+        if (val === "なし") return;
+        results.push(CONFIG[idx].name + ":" + val);
     });
-    if (bans.length > 0) results.push("禁止:" + bans.join('、'));
     resArea.innerText = "【ルール抽選結果】\n" + results.join(' / ');
     document.getElementById('result-wrapper-slot').style.display = 'block';
 }
@@ -341,8 +390,11 @@ function renderConfigEditor() {
 
 function saveConfig() {
     CONFIG.forEach((conf, idx) => {
-        const val = document.getElementById(`input-${idx}`).value;
-        conf.items = val.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
+        const el = document.getElementById(`input-${idx}`);
+        if(el) {
+            const val = el.value;
+            conf.items = val.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
+        }
     });
     TOKKAN_PACKS = document.getElementById('tokkan-list-editor').value.split(/[、,]/).map(s => s.trim()).filter(s => s !== "");
     switchTab('slot');
@@ -363,5 +415,4 @@ render();
 renderTokkanInitial();
 </script>
 </body>
-
 </html>
